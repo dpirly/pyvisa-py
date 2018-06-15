@@ -25,8 +25,90 @@ from . import common
 StatusCode = constants.StatusCode
 
 
-@Session.register(constants.InterfaceType.tcpip, 'INSTR')
-class TCPIPInstrSession(Session):
+class TCPIPInstrHislipSession(Session):
+    @staticmethod
+    def list_resources():
+        # TODO: is there a way to get this?
+        return []
+
+    def after_parsing(self):
+        pass
+
+    def close(self):
+        pass
+
+    def read(self, count):
+        pass
+
+    def write(self, data):
+        pass
+
+    def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource,
+            return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
+
+        if attribute == constants.VI_ATTR_TCPIP_ADDR:
+            return self.host_address, StatusCode.success
+
+        elif attribute == constants.VI_ATTR_TCPIP_DEVICE_NAME:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_HOSTNAME:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_NODELAY:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_PORT:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
+            raise NotImplementedError
+
+        raise UnknownAttribute(attribute)
+
+    def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified.
+            (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the
+            specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+
+        raise UnknownAttribute(attribute)
+
+    def assert_trigger(self, protocol):
+        pass
+
+    def clear(self):
+        pass
+
+    def read_stb(self):
+        pass
+
+    def lock(self, lock_type, timeout, requested_key=None):
+        pass
+
+    def unlock(self):
+        pass
+
+
+class TCPIPInstrVXISession(Session):
     """A TCPIP Session that uses the network standard library to do the low
     level communication using VXI-11
 
@@ -322,6 +404,153 @@ class TCPIPInstrSession(Session):
         if error:
             # TODO: Which message to return
             raise Exception("error unlocking: %d" % error)
+
+@Session.register(constants.InterfaceType.tcpip, 'INSTR')
+class TCPIPInstrSession(Session):
+    """A TCPIP Session that uses the network standard library to do the low
+    level communication using VXI-11
+
+    """
+
+    @staticmethod
+    def list_resources():
+        # TODO: is there a way to get this?
+        return []
+
+    def after_parsing(self):
+        if self.parsed.lan_device_name.find('hislip') != -1:
+            self.vxi_session = TCPIPInstrHislipSession(
+                self.attrs[constants.VI_ATTR_RM_SESSION],
+                self.attrs[constants.VI_ATTR_RSRC_NAME],
+                self.parsed,
+                self.open_timeout
+            )
+            self.session = self.vxi_session
+        else:
+            self.hislip_session = TCPIPInstrVXISession(
+                self.attrs[constants.VI_ATTR_RM_SESSION],
+                self.attrs[constants.VI_ATTR_RSRC_NAME],
+                self.parsed,
+                self.open_timeout
+            )
+            self.session = self.hislip_session
+
+        return self.session.after_parsing()
+
+    def close(self):
+        return self.session.clear()
+
+    def read(self, count):
+        """Reads data from device or interface synchronously.
+
+        Corresponds to viRead function of the VISA library.
+
+        :param count: Number of bytes to be read.
+        :return: data read, return value of the library call.
+        :rtype: bytes, VISAStatus
+        """
+        return self.session.read(count)
+
+    def write(self, data):
+        """Writes data to device or interface synchronously.
+
+        Corresponds to viWrite function of the VISA library.
+
+        :param data: data to be written.
+        :type data: str
+        :return: Number of bytes actually transferred, return value of the
+            library call.
+        :rtype: int, VISAStatus
+        """
+        return self.session.write(data)
+
+    def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource,
+            return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
+        return self.session._get_attribute(attribute)
+
+    def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified.
+            (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the
+            specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+
+        raise UnknownAttribute(attribute)
+
+    def assert_trigger(self, protocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        :param protocol: Trigger protocol to use during assertion.
+            (Constants.PROT*)
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        return self.session.assert_trigger(protocol)
+
+    def clear(self):
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        return self.session.clear()
+
+    def read_stb(self):
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        :return: Service request status byte, return value of the library call.
+        :rtype: int, VISAStatus
+        """
+
+        return self.session.read_stb()
+
+    def lock(self, lock_type, timeout, requested_key=None):
+        """Establishes an access mode to the specified resources.
+
+        Corresponds to viLock function of the VISA library.
+
+        :param lock_type: Specifies the type of lock requested, either
+            Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
+        :param timeout: Absolute time period (in milliseconds) that a resource
+            waits to get unlocked by the locking session before returning an
+            error.
+        :param requested_key: This parameter is not used and should be set to
+            VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
+        :return: access_key that can then be passed to other sessions to share
+            the lock, return value of the library call.
+        :rtype: str, VISAStatus
+        """
+        return self.session.lock(lock_type, timeout, requested_key)
+
+    def unlock(self):
+        """Relinquishes a lock for the specified resource.
+
+        Corresponds to viUnlock function of the VISA library.
+
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        return self.session.unlock()
 
 
 @Session.register(constants.InterfaceType.tcpip, 'SOCKET')
