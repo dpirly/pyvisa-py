@@ -18,7 +18,7 @@ import time
 from pyvisa import constants, attributes, errors
 
 from .sessions import Session, UnknownAttribute
-from .protocols import vxi11, rpc
+from .protocols import vxi11, rpc, hislip
 from . import common
 
 
@@ -32,16 +32,21 @@ class TCPIPInstrHislipSession(Session):
         return []
 
     def after_parsing(self):
-        pass
+        self.interface = hislip.HiSLIP()
+
+        self.interface.connect(self.parsed.host_address,
+                               self.parsed.lan_device_name,
+                               port=4880,
+                               vendor_id='WZ')
 
     def close(self):
-        pass
+        self.interface.close()
 
     def read(self, count):
-        pass
+        return self.interface.read(count).encode(), StatusCode.success
 
     def write(self, data):
-        pass
+        return self.interface.write(data), StatusCode.success
 
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
@@ -96,7 +101,7 @@ class TCPIPInstrHislipSession(Session):
         pass
 
     def clear(self):
-        pass
+        self.interface.device_clear()
 
     def read_stb(self):
         pass
